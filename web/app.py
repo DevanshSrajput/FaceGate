@@ -11,17 +11,27 @@ from typing import Any
 
 from flask import (
     Flask,
+    Response,
     jsonify,
     redirect,
     render_template,
     request,
     send_from_directory,
+    stream_with_context,
     url_for,
 )
 
 from config import FLASK_PORT, FLASK_SECRET_KEY, INTRUDERS_DIR
 from modules.database import get_logs, get_summary, init_db
-from web.auth import is_authenticated, login_required, login_user, logout_user, validate_credentials
+from web.auth import (
+    is_authenticated,
+    is_rate_limited,
+    login_required,
+    login_user,
+    logout_user,
+    record_failed_attempt,
+    validate_credentials,
+)
 
 
 camera_stop_event = threading.Event()
@@ -154,13 +164,19 @@ def register_routes(app: Flask) -> None:
     def login() -> Any:
         """Render and process the admin login form."""
         error = None
+        client_ip = request.remote_addr or "127.0.0.1"
+
         if request.method == "POST":
-            username = request.form.get("username", "")
-            password = request.form.get("password", "")
-            if validate_credentials(username, password):
-                login_user(username)
-                return redirect(url_for("dashboard"))
-            error = "Invalid credentials or missing password hash."
+            if is_rate_limited(client_ip):
+                error = "Too many failed attempts. Please wait a few minutes."
+            else:
+                username = request.form.get("username", "")
+                password = request.form.get("password", "")
+                if validate_credentials(username, password):
+                    login_user(username)
+                    return redirect(url_for("dashboard"))
+                record_failed_attempt(client_ip)
+                error = "Invalid credentials or missing password hash."
         return render_template("login.html", error=error)
 
     @app.get("/logout")
@@ -237,6 +253,30 @@ def register_routes(app: Flask) -> None:
         if request.method == "GET":
             return redirect(url_for("dashboard"))
         return jsonify({"stopped": stopped, **status})
+
+    @app.get("/dashboard/stream")
+    @login_required
+    def dashboard_stream() -> Any:
+        """Push dashboard summary and camera status via Server-Sent Events."""
+        import json
+
+        def event_stream():
+            while True:
+                payload = {
+                    "summary": get_summary(),
+                    "camera": get_camera_status(),
+                }
+                yield f"data: {json.dumps(payload)}\n\n"
+                time.sleep(3)
+
+        return Response(
+            stream_with_context(event_stream()),
+            mimetype="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     @app.get("/status")
     @login_required

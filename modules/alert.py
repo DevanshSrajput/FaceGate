@@ -4,14 +4,27 @@ from __future__ import annotations
 
 import logging
 import os
+import smtplib
 import threading
 import time
 from collections.abc import Callable
 from datetime import datetime
+from email.mime.image import MIMEImage
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 import requests
 
-from config import ALERT_COOLDOWN_SEC, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+from config import (
+    ALERT_COOLDOWN_SEC,
+    SMTP_HOST,
+    SMTP_PASSWORD,
+    SMTP_PORT,
+    SMTP_RECIPIENT,
+    SMTP_USERNAME,
+    TELEGRAM_BOT_TOKEN,
+    TELEGRAM_CHAT_ID,
+)
 
 
 TimeProvider = Callable[[], float]
@@ -64,11 +77,12 @@ class AlertManager:
             return False
 
         alert_time = timestamp or datetime.now()
-        thread = threading.Thread(
-            target=self.send_telegram_alert,
-            args=(image_path, alert_time),
-            daemon=True,
-        )
+
+        def _send_all() -> None:
+            self.send_telegram_alert(image_path, alert_time)
+            self.send_email_alert(image_path, alert_time)
+
+        thread = threading.Thread(target=_send_all, daemon=True)
         thread.start()
         return True
 
@@ -113,13 +127,39 @@ class AlertManager:
         image_path: str | None,
         timestamp: datetime,
     ) -> bool:
-        """Placeholder for optional SMTP email alert support."""
-        logging.info(
-            "Email alert not configured for image_path=%s timestamp=%s.",
-            image_path,
-            timestamp.isoformat(timespec="seconds"),
-        )
-        return False
+        """Send an intruder alert via SMTP email as a secondary channel."""
+        if not SMTP_HOST or not SMTP_USERNAME or not SMTP_PASSWORD or not SMTP_RECIPIENT:
+            logging.info("Email alert skipped because SMTP is not configured.")
+            return False
+
+        try:
+            msg = MIMEMultipart()
+            msg["Subject"] = f"FaceGate Alert: Unauthorized access at {timestamp.isoformat(timespec='seconds')}"
+            msg["From"] = SMTP_USERNAME
+            msg["To"] = SMTP_RECIPIENT
+
+            body = (
+                f"ALERT: Unauthorized access was detected at "
+                f"{timestamp.isoformat(timespec='seconds')}.\n\n"
+                f"The intruder image is attached."
+            )
+            msg.attach(MIMEText(body, "plain"))
+
+            if image_path and os.path.exists(image_path):
+                with open(image_path, "rb") as img_file:
+                    image_part = MIMEImage(img_file.read(), name=os.path.basename(image_path))
+                    msg.attach(image_part)
+
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
+                server.starttls()
+                server.login(SMTP_USERNAME, SMTP_PASSWORD)
+                server.send_message(msg)
+
+            logging.info("Email alert sent successfully to %s.", SMTP_RECIPIENT)
+            return True
+        except (OSError, smtplib.SMTPException) as exc:
+            logging.error("Email alert failed: %s", exc)
+            return False
 
 
 _DEFAULT_ALERT_MANAGER = AlertManager()

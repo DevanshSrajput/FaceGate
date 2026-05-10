@@ -140,23 +140,31 @@ def run_camera_loop(
     if not known_encodings:
         print(f"No enrolled encodings found at {encodings_path}. Unknown faces will be denied.")
 
-    try:
-        init_db()
-    except RuntimeError as exc:
-        print(f"Database initialization skipped: {exc}")
+    init_db()
 
     access_controller = AccessController()
     alert_manager = AlertManager()
+    MAX_CONSECUTIVE_FAILURES = 10
     capture = open_camera(camera_index)
+    consecutive_failures = 0
     print("FaceGate live recognition started. Press Q or ESC to stop.")
 
     try:
         while stop_event is None or not stop_event.is_set():
             ok, frame = capture.read()
             if not ok:
-                print("Camera frame read failed; retrying...")
+                consecutive_failures += 1
+                print(f"Camera frame read failed ({consecutive_failures}/{MAX_CONSECUTIVE_FAILURES}); retrying...")
                 time.sleep(0.2)
+                if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                    print("Camera appears disconnected — attempting reconnect...")
+                    capture.release()
+                    time.sleep(1.0)
+                    capture = open_camera(camera_index)
+                    consecutive_failures = 0
+                    print("Camera reconnected.")
                 continue
+            consecutive_failures = 0
 
             locations, names, statuses = classify_frame(
                 frame,

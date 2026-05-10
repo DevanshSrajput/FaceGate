@@ -1,6 +1,5 @@
 {% extends "base.html" %}
 {% block title %}FaceGate Dashboard{% endblock %}
-{% block head_extra %}<meta http-equiv="refresh" content="5">{% endblock %}
 {% block content %}
 <section class="page-head">
     <h1>Dashboard</h1>
@@ -17,25 +16,25 @@
 <section class="metrics">
     <article>
         <span>Total Today</span>
-        <strong>{{ summary.total_today }}</strong>
+        <strong id="metric-total">{{ summary.total_today }}</strong>
     </article>
     <article>
         <span>Granted</span>
-        <strong>{{ summary.granted_today }}</strong>
+        <strong id="metric-granted">{{ summary.granted_today }}</strong>
     </article>
     <article>
         <span>Denied</span>
-        <strong>{{ summary.denied_today }}</strong>
+        <strong id="metric-denied">{{ summary.denied_today }}</strong>
     </article>
     <article>
         <span>Camera</span>
-        <strong>{{ "Running" if camera.running else "Stopped" }}</strong>
+        <strong id="metric-camera">{{ "Running" if camera.running else "Stopped" }}</strong>
     </article>
 </section>
 
-{% if camera.last_error %}
-    <p class="error">Camera error: {{ camera.last_error }}</p>
-{% endif %}
+<p id="camera-error" class="error"{% if not camera.last_error %} style="display:none"{% endif %}>
+    Camera error: {{ camera.last_error or "" }}
+</p>
 
 <section>
     <h2>Latest Events</h2>
@@ -49,7 +48,7 @@
                 <th>Image</th>
             </tr>
         </thead>
-        <tbody>
+        <tbody id="events-body">
             {% for row in summary.last_events %}
                 <tr>
                     <td>{{ row.id }}</td>
@@ -65,9 +64,67 @@
                     </td>
                 </tr>
             {% else %}
-                <tr><td colspan="5">No events recorded.</td></tr>
+                <tr id="no-events-row"><td colspan="5">No events recorded.</td></tr>
             {% endfor %}
         </tbody>
     </table>
 </section>
+
+<script>
+(function () {
+    var metricTotal = document.getElementById("metric-total");
+    var metricGranted = document.getElementById("metric-granted");
+    var metricDenied = document.getElementById("metric-denied");
+    var metricCamera = document.getElementById("metric-camera");
+    var cameraError = document.getElementById("camera-error");
+    var eventsBody = document.getElementById("events-body");
+
+    if (!window.EventSource) return;
+
+    var src = new EventSource("{{ url_for('dashboard_stream') }}");
+    src.addEventListener("message", function (e) {
+        try {
+            var payload = JSON.parse(e.data);
+            var summary = payload.summary;
+            var camera = payload.camera;
+
+            if (metricTotal) metricTotal.textContent = summary.total_today;
+            if (metricGranted) metricGranted.textContent = summary.granted_today;
+            if (metricDenied) metricDenied.textContent = summary.denied_today;
+            if (metricCamera) metricCamera.textContent = camera.running ? "Running" : "Stopped";
+
+            if (cameraError) {
+                if (camera.last_error) {
+                    cameraError.textContent = "Camera error: " + camera.last_error;
+                    cameraError.style.display = "";
+                } else {
+                    cameraError.style.display = "none";
+                }
+            }
+
+            if (eventsBody && summary.last_events) {
+                var rows = "";
+                for (var i = 0; i < summary.last_events.length; i++) {
+                    var row = summary.last_events[i];
+                    var badgeClass = row.status === "Granted" ? "granted" : "denied";
+                    var imageCell = row.image_path
+                        ? '<a href="/intruders/image/' + row.image_path.split("/").pop().split("\\").pop() + '">View</a>'
+                        : "-";
+                    rows += '<tr><td>' + row.id + '</td><td>' + row.name + '</td>'
+                        + '<td><span class="badge ' + badgeClass + '">' + row.status + '</span></td>'
+                        + '<td>' + row.timestamp + '</td><td>' + imageCell + '</td></tr>';
+                }
+                if (!rows) {
+                    rows = '<tr><td colspan="5">No events recorded.</td></tr>';
+                }
+                eventsBody.innerHTML = rows;
+            }
+        } catch (_) {}
+    });
+
+    src.addEventListener("error", function () {
+        src.close();
+    });
+})();
+</script>
 {% endblock %}

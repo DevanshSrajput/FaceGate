@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(graphify install *)"
+      "Bash(graphify install *)",
+      "Bash(python -m pytest test_integration.py -v)",
+      "Bash(python -m unittest test_integration.py -v)",
+      "Bash(python -m unittest test_integration -v)",
+      "Bash(python -m unittest test_modules -v)",
+      "Bash(python -m unittest test_modules test_integration -v)",
+      "Bash(python -m py_compile config.py enroll.py main.py modules/face_engine.py modules/access_control.py modules/database.py modules/alert.py modules/camera.py web/app.py web/auth.py test_modules.py test_integration.py)"
     ]
   }
 }
