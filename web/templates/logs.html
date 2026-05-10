@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}FaceGate Logs{% endblock %}
+{% block content %}
+<section class="page-head">
+    <h1>Logs</h1>
+</section>
+
+<form method="get" action="{{ url_for('logs') }}" class="filters">
+    <input type="text" name="name" placeholder="Name" value="{{ filters.get('name', '') }}">
+    <select name="status">
+        <option value="">Any status</option>
+        <option value="Granted" {% if filters.get('status') == 'Granted' %}selected{% endif %}>Granted</option>
+        <option value="Denied" {% if filters.get('status') == 'Denied' %}selected{% endif %}>Denied</option>
+    </select>
+    <input type="date" name="date" value="{{ filters.get('date', '') }}">
+    <button type="submit">Filter</button>
+    <a class="button secondary" href="{{ url_for('logs') }}">Clear</a>
+</form>
+
+<table>
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Timestamp</th>
+            <th>Image</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in logs %}
+            <tr>
+                <td>{{ row.id }}</td>
+                <td>{{ row.name }}</td>
+                <td><span class="badge {{ row.status|lower }}">{{ row.status }}</span></td>
+                <td>{{ row.timestamp }}</td>
+                <td>
+                    {% if row.image_path %}
+                        <a href="{{ url_for('intruder_image', filename=row.image_path|image_basename) }}">View</a>
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="5">No logs match the current filters.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div class="pagination">
+    {% if page > 1 %}
+        <a class="button secondary" href="{{ url_for('logs', page=page-1, limit=limit, **filters) }}">Previous</a>
+    {% endif %}
+    <span>Page {{ page }}</span>
+    {% if logs|length == limit %}
+        <a class="button secondary" href="{{ url_for('logs', page=page+1, limit=limit, **filters) }}">Next</a>
+    {% endif %}
+</div>
+{% endblock %}

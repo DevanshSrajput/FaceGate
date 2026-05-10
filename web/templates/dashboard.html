@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}FaceGate Dashboard{% endblock %}
+{% block head_extra %}<meta http-equiv="refresh" content="5">{% endblock %}
+{% block content %}
+<section class="page-head">
+    <h1>Dashboard</h1>
+    <div class="actions">
+        <form method="post" action="{{ url_for('start') }}">
+            <button type="submit">Start Camera</button>
+        </form>
+        <form method="post" action="{{ url_for('stop') }}">
+            <button type="submit" class="secondary">Stop Camera</button>
+        </form>
+    </div>
+</section>
+
+<section class="metrics">
+    <article>
+        <span>Total Today</span>
+        <strong>{{ summary.total_today }}</strong>
+    </article>
+    <article>
+        <span>Granted</span>
+        <strong>{{ summary.granted_today }}</strong>
+    </article>
+    <article>
+        <span>Denied</span>
+        <strong>{{ summary.denied_today }}</strong>
+    </article>
+    <article>
+        <span>Camera</span>
+        <strong>{{ "Running" if camera.running else "Stopped" }}</strong>
+    </article>
+</section>
+
+{% if camera.last_error %}
+    <p class="error">Camera error: {{ camera.last_error }}</p>
+{% endif %}
+
+<section>
+    <h2>Latest Events</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Timestamp</th>
+                <th>Image</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in summary.last_events %}
+                <tr>
+                    <td>{{ row.id }}</td>
+                    <td>{{ row.name }}</td>
+                    <td><span class="badge {{ row.status|lower }}">{{ row.status }}</span></td>
+                    <td>{{ row.timestamp }}</td>
+                    <td>
+                        {% if row.image_path %}
+                            <a href="{{ url_for('intruder_image', filename=row.image_path|image_basename) }}">View</a>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                </tr>
+            {% else %}
+                <tr><td colspan="5">No events recorded.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

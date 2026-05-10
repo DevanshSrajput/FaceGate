@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    {% block head_extra %}{% endblock %}
+    <title>{% block title %}FaceGate{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header class="topbar">
+        <a class="brand" href="{{ url_for('dashboard') }}">FaceGate</a>
+        <nav class="nav">
+            <a href="{{ url_for('dashboard') }}">Dashboard</a>
+            <a href="{{ url_for('logs') }}">Logs</a>
+            <a href="{{ url_for('intruders') }}">Intruders</a>
+            <a href="{{ url_for('logout') }}">Logout</a>
+        </nav>
+    </header>
+    <main class="page">
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

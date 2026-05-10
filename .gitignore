@@ -1,0 +1,11 @@
+.env
+*.pkl
+/intruders/
+__pycache__/
+*.pyc
+/data/
+.venv/
+venv/
+env/
+*.log
+.pytest_cache/

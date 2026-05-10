@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}FaceGate Intruders{% endblock %}
+{% block content %}
+<section class="page-head">
+    <h1>Intruders</h1>
+</section>
+
+<section class="gallery">
+    {% for image in images %}
+        <article class="image-card">
+            <img src="{{ url_for('intruder_image', filename=image.filename) }}" alt="Captured intruder">
+            <div>
+                <strong>{{ image.filename }}</strong>
+                <span>{{ image.timestamp }}</span>
+            </div>
+        </article>
+    {% else %}
+        <p>No intruder images captured.</p>
+    {% endfor %}
+</section>
+{% endblock %}
