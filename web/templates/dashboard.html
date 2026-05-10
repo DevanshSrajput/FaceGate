@@ -4,12 +4,8 @@
 <section class="page-head">
     <h1>Dashboard</h1>
     <div class="actions">
-        <form method="post" action="{{ url_for('start') }}">
-            <button type="submit">Start Camera</button>
-        </form>
-        <form method="post" action="{{ url_for('stop') }}">
-            <button type="submit" class="secondary">Stop Camera</button>
-        </form>
+        <button id="btn-start" onclick="cameraAction('start')">Start Camera</button>
+        <button id="btn-stop" class="secondary" onclick="cameraAction('stop')">Stop Camera</button>
     </div>
 </section>
 
@@ -35,6 +31,13 @@
 <p id="camera-error" class="error"{% if not camera.last_error %} style="display:none"{% endif %}>
     Camera error: {{ camera.last_error or "" }}
 </p>
+
+<section>
+    <h2>Live Preview</h2>
+    <div class="video-container">
+        <img id="live-preview" src="{{ url_for('video_feed') }}" alt="Camera feed">
+    </div>
+</section>
 
 <section>
     <h2>Latest Events</h2>
@@ -71,6 +74,27 @@
 </section>
 
 <script>
+function cameraAction(action) {
+    var btnStart = document.getElementById("btn-start");
+    var btnStop = document.getElementById("btn-stop");
+    if (btnStart) btnStart.disabled = true;
+    if (btnStop) btnStop.disabled = true;
+
+    fetch("/" + action, { method: "POST" })
+        .then(function (r) { return r.json(); })
+        .then(function () {
+            // SSE will pick up the new state — re-enable buttons shortly
+            setTimeout(function () {
+                if (btnStart) btnStart.disabled = false;
+                if (btnStop) btnStop.disabled = false;
+            }, 1000);
+        })
+        .catch(function () {
+            if (btnStart) btnStart.disabled = false;
+            if (btnStop) btnStop.disabled = false;
+        });
+}
+
 (function () {
     var metricTotal = document.getElementById("metric-total");
     var metricGranted = document.getElementById("metric-granted");
@@ -78,6 +102,9 @@
     var metricCamera = document.getElementById("metric-camera");
     var cameraError = document.getElementById("camera-error");
     var eventsBody = document.getElementById("events-body");
+    var livePreview = document.getElementById("live-preview");
+    var btnStart = document.getElementById("btn-start");
+    var btnStop = document.getElementById("btn-stop");
 
     if (!window.EventSource) return;
 
@@ -92,6 +119,9 @@
             if (metricGranted) metricGranted.textContent = summary.granted_today;
             if (metricDenied) metricDenied.textContent = summary.denied_today;
             if (metricCamera) metricCamera.textContent = camera.running ? "Running" : "Stopped";
+
+            if (btnStart) btnStart.disabled = camera.running;
+            if (btnStop) btnStop.disabled = !camera.running;
 
             if (cameraError) {
                 if (camera.last_error) {

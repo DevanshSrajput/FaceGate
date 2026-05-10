@@ -9,6 +9,9 @@ import time
 from pathlib import Path
 from typing import Any
 
+import cv2
+import numpy as np
+
 from flask import (
     Flask,
     Response,
@@ -44,6 +47,25 @@ camera_state: dict[str, Any] = {
 }
 camera_state_lock = threading.Lock()
 
+# Shared buffer for the latest annotated frame (JPEG bytes) pushed by the
+# camera loop and consumed by the /video_feed MJPEG route.
+_latest_frame_jpeg: bytes | None = None
+_latest_frame_lock = threading.Lock()
+
+
+def _make_placeholder_jpeg() -> bytes:
+    """Return a blank placeholder JPEG for when the camera is not running."""
+    canvas = np.zeros((480, 640, 3), dtype=np.uint8)
+    cv2.putText(
+        canvas, "Camera Offline", (120, 260),
+        cv2.FONT_HERSHEY_DUPLEX, 1.2, (180, 180, 180), 2,
+    )
+    cv2.putText(
+        canvas, "Click Start Camera", (140, 310),
+        cv2.FONT_HERSHEY_DUPLEX, 0.7, (140, 140, 140), 1,
+    )
+    return cv2.imencode(".jpg", canvas, [cv2.IMWRITE_JPEG_QUALITY, 60])[1].tobytes()
+
 
 def create_app() -> Flask:
     """Create and configure the FaceGate Flask application."""
@@ -74,13 +96,23 @@ def set_camera_status(**updates: Any) -> None:
         camera_state.update(updates)
 
 
-def camera_frame_callback(_frame: Any) -> None:
-    """Update simple FPS telemetry when the camera loop produces a frame."""
+def camera_frame_callback(annotated_frame: np.ndarray) -> None:
+    """Store the latest frame for MJPEG streaming and update FPS telemetry."""
+    global _latest_frame_jpeg
+
     now = time.monotonic()
     previous = getattr(camera_frame_callback, "_last_frame_at", None)
     fps = 0.0 if previous is None else 1 / max(now - previous, 0.001)
     setattr(camera_frame_callback, "_last_frame_at", now)
     set_camera_status(fps=round(fps, 2))
+
+    try:
+        _, buffer = cv2.imencode(".jpg", annotated_frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        jpeg_bytes = buffer.tobytes()
+        with _latest_frame_lock:
+            _latest_frame_jpeg = jpeg_bytes
+    except cv2.error:
+        pass
 
 
 def camera_worker() -> None:
@@ -99,10 +131,13 @@ def camera_worker() -> None:
 
 def start_camera_thread() -> bool:
     """Start the recognition loop if it is not already running."""
-    global camera_thread
+    global camera_thread, _latest_frame_jpeg
 
     if camera_thread is not None and camera_thread.is_alive():
         return False
+
+    with _latest_frame_lock:
+        _latest_frame_jpeg = None
 
     camera_stop_event.clear()
     camera_thread = threading.Thread(target=camera_worker, daemon=True)
@@ -112,11 +147,18 @@ def start_camera_thread() -> bool:
 
 def stop_camera_thread() -> bool:
     """Signal the recognition loop to stop if it is currently running."""
+    global _latest_frame_jpeg
+
     if camera_thread is None or not camera_thread.is_alive():
         set_camera_status(running=False, fps=0.0)
+        with _latest_frame_lock:
+            _latest_frame_jpeg = None
         return False
 
     camera_stop_event.set()
+
+    with _latest_frame_lock:
+        _latest_frame_jpeg = None
     return True
 
 
@@ -276,6 +318,27 @@ def register_routes(app: Flask) -> None:
                 "Cache-Control": "no-cache",
                 "X-Accel-Buffering": "no",
             },
+        )
+
+    @app.get("/video_feed")
+    @login_required
+    def video_feed() -> Any:
+        """Stream the live annotated camera feed as MJPEG."""
+        def generate_frames():
+            while True:
+                with _latest_frame_lock:
+                    jpeg = _latest_frame_jpeg
+                if jpeg is None:
+                    jpeg = _make_placeholder_jpeg()
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n\r\n" + jpeg + b"\r\n"
+                )
+                time.sleep(0.05)
+
+        return Response(
+            generate_frames(),
+            mimetype="multipart/x-mixed-replace; boundary=frame",
         )
 
     @app.get("/status")
