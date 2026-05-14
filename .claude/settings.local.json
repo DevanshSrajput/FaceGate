@@ -10,7 +10,8 @@
       "Bash(python -m py_compile config.py enroll.py main.py modules/face_engine.py modules/access_control.py modules/database.py modules/alert.py modules/camera.py web/app.py web/auth.py test_modules.py test_integration.py)",
       "Bash(python -c 'from werkzeug.security import check_password_hash; h='\\\\''scrypt:32768:8:1$VWj9lF4P2uzY0xn8$f0557a2a6d98ae2fc1da944cd7306855105654cbd295f7410849b202455e91fbb7406e70e6d9c0e75b8c4c121759951831540a76102a7efe8583f53ce4393e0f'\\\\''; print\\('\\\\''Match'\\\\'' if check_password_hash\\(h, '\\\\''hrfPM!liSorANzyJ5j'\\\\''\\) else '\\\\''No match'\\\\''\\)')",
       "Bash(python -m py_compile web\\\\app.py web\\\\auth.py)",
-      "Bash(python -m py_compile web/app.py)"
+      "Bash(python -m py_compile web/app.py)",
+      "mcp__vexp__run_pipeline"
     ]
   }
 }

@@ -6,14 +6,14 @@ Built from [FaceGate_PRD.md](FaceGate_PRD.md) v1.0.
 
 ## Stack
 
-| Component | Technology |
-|---|---|
-| Language | Python 3.11+ |
+| Component       | Technology                      |
+| --------------- | ------------------------------- |
+| Language        | Python 3.11+                    |
 | Computer Vision | OpenCV, face-recognition (dlib) |
-| Web Framework | Flask 3.x |
-| Database | SQLite |
-| Alerting | Telegram Bot API + SMTP email |
-| Config | python-dotenv |
+| Web Framework   | Flask 3.x                       |
+| Database        | SQLite                          |
+| Alerting        | Telegram Bot API + SMTP email   |
+| Config          | python-dotenv                   |
 
 ## Project Structure
 
@@ -89,8 +89,8 @@ TELEGRAM_CHAT_ID=             # Your Telegram chat ID (get via @userinfobot)
 
 # --- Required for dashboard ---
 FLASK_SECRET_KEY=             # Generate: python -c "import secrets; print(secrets.token_urlsafe(48))"
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD_HASH=          # Generate: python -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('your-password'))"
+
+# Note: Dashboard credentials are hardcoded in config.py (Username: admin, Password: admin)
 
 # --- Optional: email alert fallback ---
 SMTP_HOST=
@@ -142,23 +142,28 @@ python -m web.app
 
 Open `http://127.0.0.1:5000/login` in your browser.
 
+**Default web app credentials:**
+
+- **Username:** `admin`
+- **Password:** `1` (hardcoded in config.py)
+
 ## Dashboard Routes
 
 All routes except `/login` require authentication.
 
-| Route | Method | Description |
-|---|---|---|
-| `/login` | GET, POST | Admin login form |
-| `/logout` | GET | End session |
-| `/dashboard` | GET | Live dashboard — summary cards, camera controls, latest events (SSE auto-update) |
-| `/dashboard/stream` | GET | Server-Sent Events endpoint (dashboard consumes this automatically) |
-| `/logs` | GET | Paginated access log table with name/status/date filters |
-| `/logs/filter?format=json` | GET | Filtered logs as JSON array |
-| `/intruders` | GET | Intruder image gallery |
-| `/intruders/image/<filename>` | GET | Serve a captured intruder image (protected) |
-| `/start` | GET, POST | Start background camera recognition |
-| `/stop` | GET, POST | Stop background camera recognition |
-| `/status` | GET | Camera state as JSON: `{"running": true, "fps": 12.5, ...}` |
+| Route                         | Method    | Description                                                                      |
+| ----------------------------- | --------- | -------------------------------------------------------------------------------- |
+| `/login`                      | GET, POST | Admin login form                                                                 |
+| `/logout`                     | GET       | End session                                                                      |
+| `/dashboard`                  | GET       | Live dashboard — summary cards, camera controls, latest events (SSE auto-update) |
+| `/dashboard/stream`           | GET       | Server-Sent Events endpoint (dashboard consumes this automatically)              |
+| `/logs`                       | GET       | Paginated access log table with name/status/date filters                         |
+| `/logs/filter?format=json`    | GET       | Filtered logs as JSON array                                                      |
+| `/intruders`                  | GET       | Intruder image gallery                                                           |
+| `/intruders/image/<filename>` | GET       | Serve a captured intruder image (protected)                                      |
+| `/start`                      | GET, POST | Start background camera recognition                                              |
+| `/stop`                       | GET, POST | Stop background camera recognition                                               |
+| `/status`                     | GET       | Camera state as JSON: `{"running": true, "fps": 12.5, ...}`                      |
 
 ## Alert Channels
 
@@ -188,19 +193,19 @@ For Gmail, use an [App Password](https://support.google.com/accounts/answer/1858
 
 All tunable parameters live in `config.py` and can be overridden via `.env`:
 
-| Constant | Default | Description |
-|---|---|---|
-| `RECOGNITION_THRESHOLD` | `0.6` | Euclidean distance threshold — lower = stricter matching |
-| `CONFIRMATION_FRAMES` | `3` | Consecutive frames before a GRANT event fires |
-| `ACCESS_COOLDOWN_SEC` | `30` | Seconds before same user triggers another GRANT log |
-| `ALERT_COOLDOWN_SEC` | `60` | Seconds between intruder alert dispatches |
-| `CAMERA_INDEX` | `0` | OpenCV VideoCapture device index |
-| `FRAME_SCALE` | `0.25` | Downsample factor per frame before recognition |
-| `DB_PATH` | `./data/access_logs.db` | SQLite database file path |
-| `ENCODINGS_PATH` | `./data/encodings.pkl` | Serialized face encodings file |
-| `INTRUDERS_DIR` | `./intruders/` | Directory for captured intruder images |
-| `FLASK_PORT` | `5000` | Flask web server port |
-| `DETECTION_MODEL` | `hog` | Face detection model: `hog` (fast) or `cnn` (accurate, GPU recommended) |
+| Constant                | Default                 | Description                                                             |
+| ----------------------- | ----------------------- | ----------------------------------------------------------------------- |
+| `RECOGNITION_THRESHOLD` | `0.6`                   | Euclidean distance threshold — lower = stricter matching                |
+| `CONFIRMATION_FRAMES`   | `3`                     | Consecutive frames before a GRANT event fires                           |
+| `ACCESS_COOLDOWN_SEC`   | `30`                    | Seconds before same user triggers another GRANT log                     |
+| `ALERT_COOLDOWN_SEC`    | `60`                    | Seconds between intruder alert dispatches                               |
+| `CAMERA_INDEX`          | `0`                     | OpenCV VideoCapture device index                                        |
+| `FRAME_SCALE`           | `0.25`                  | Downsample factor per frame before recognition                          |
+| `DB_PATH`               | `./data/access_logs.db` | SQLite database file path                                               |
+| `ENCODINGS_PATH`        | `./data/encodings.pkl`  | Serialized face encodings file                                          |
+| `INTRUDERS_DIR`         | `./intruders/`          | Directory for captured intruder images                                  |
+| `FLASK_PORT`            | `5000`                  | Flask web server port                                                   |
+| `DETECTION_MODEL`       | `hog`                   | Face detection model: `hog` (fast) or `cnn` (accurate, GPU recommended) |
 
 ## Security
 
@@ -221,14 +226,14 @@ python -m unittest test_modules.py -v
 
 Covers UT-01 through UT-06 from the PRD:
 
-| Test | Description |
-|---|---|
+| Test  | Description                                  |
+| ----- | -------------------------------------------- |
 | UT-01 | Identical encodings match with zero distance |
-| UT-02 | Unknown encodings return "Unknown" |
-| UT-03 | `init_db()` creates correct table schema |
-| UT-04 | `log_event()` inserts a retrievable row |
-| UT-05 | Access cooldown suppresses duplicate logs |
-| UT-06 | Alert cooldown suppresses duplicate alerts |
+| UT-02 | Unknown encodings return "Unknown"           |
+| UT-03 | `init_db()` creates correct table schema     |
+| UT-04 | `log_event()` inserts a retrievable row      |
+| UT-05 | Access cooldown suppresses duplicate logs    |
+| UT-06 | Alert cooldown suppresses duplicate alerts   |
 
 ### Integration Tests
 
@@ -238,12 +243,12 @@ python -m unittest test_integration.py -v
 
 Covers IT-01 through IT-04 from the PRD:
 
-| Test | Description |
-|---|---|
-| IT-01 | Enrolled user encoding → GRANTED event in database |
-| IT-02 | Unknown encoding → DENIED event + intruder image saved |
+| Test  | Description                                                                           |
+| ----- | ------------------------------------------------------------------------------------- |
+| IT-01 | Enrolled user encoding → GRANTED event in database                                    |
+| IT-02 | Unknown encoding → DENIED event + intruder image saved                                |
 | IT-03 | Flask `/logs` returns HTTP 200 with log rows; `/logs/filter?format=json` returns JSON |
-| IT-04 | POST `/start` spawns camera thread; GET `/status` confirms running |
+| IT-04 | POST `/start` spawns camera thread; GET `/status` confirms running                    |
 
 ### Syntax Check
 
@@ -287,24 +292,24 @@ python -m py_compile config.py enroll.py main.py modules\face_engine.py modules\
 
 ## PRD Deliverables Status
 
-| Deliverable | Status |
-|---|---|
-| Modular face engine | Done — `modules/face_engine.py` |
-| Enrollment CLI | Done — `enroll.py` |
-| Camera loop with live recognition | Done — `modules/camera.py`, `main.py` |
-| Multi-frame confirmation + cooldown | Done — `modules/access_control.py` |
-| SQLite logging | Done — `modules/database.py` |
-| Intruder image capture | Done — saved to `intruders/` |
-| Telegram alerts | Done — `modules/alert.py` |
-| Email alert fallback | Done — `modules/alert.py` via SMTP |
-| Flask web dashboard | Done — `web/app.py`, `web/auth.py` |
-| Dashboard SSE live updates | Done — `/dashboard/stream` endpoint |
-| Login rate limiting | Done — IP-based, 5 attempts / 5 min |
-| Camera disconnect recovery | Done — auto-reconnect after 10 failures |
-| Unit tests (UT-01 to UT-06) | Done — `test_modules.py` |
-| Integration tests (IT-01 to IT-04) | Done — `test_integration.py` |
-| Configuration via .env | Done — `config.py`, `.env.example` |
-| Demo screenshot | Done — `artifacts/facegate-dashboard.png` |
+| Deliverable                         | Status                                    |
+| ----------------------------------- | ----------------------------------------- |
+| Modular face engine                 | Done — `modules/face_engine.py`           |
+| Enrollment CLI                      | Done — `enroll.py`                        |
+| Camera loop with live recognition   | Done — `modules/camera.py`, `main.py`     |
+| Multi-frame confirmation + cooldown | Done — `modules/access_control.py`        |
+| SQLite logging                      | Done — `modules/database.py`              |
+| Intruder image capture              | Done — saved to `intruders/`              |
+| Telegram alerts                     | Done — `modules/alert.py`                 |
+| Email alert fallback                | Done — `modules/alert.py` via SMTP        |
+| Flask web dashboard                 | Done — `web/app.py`, `web/auth.py`        |
+| Dashboard SSE live updates          | Done — `/dashboard/stream` endpoint       |
+| Login rate limiting                 | Done — IP-based, 5 attempts / 5 min       |
+| Camera disconnect recovery          | Done — auto-reconnect after 10 failures   |
+| Unit tests (UT-01 to UT-06)         | Done — `test_modules.py`                  |
+| Integration tests (IT-01 to IT-04)  | Done — `test_integration.py`              |
+| Configuration via .env              | Done — `config.py`, `.env.example`        |
+| Demo screenshot                     | Done — `artifacts/facegate-dashboard.png` |
 
 ## Troubleshooting
 

@@ -24,8 +24,10 @@ DETECTION_MODEL = os.getenv("DETECTION_MODEL", "hog")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 FLASK_SECRET_KEY = os.getenv("FLASK_SECRET_KEY", "")
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", "")
+
+# Hardcoded credentials for web dashboard (never change)
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD_HASH = "scrypt:32768:8:1$l0ysQ4Sus4Z9E4bx$f81228bf4912f873b7a06e5c5aa20edb0794f3c3157cd7ef49e3d4ce2c0a82f5513f3032836e02739545f065e8b436375b91b4aabace2bd142168ef56d231950"
 
 SMTP_HOST = os.getenv("SMTP_HOST", "")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
