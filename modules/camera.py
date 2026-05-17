@@ -45,12 +45,27 @@ def build_intruder_image_path(
     return candidate
 
 
+def has_visual_content(frame: np.ndarray) -> bool:
+    """Return True when a frame has enough signal to be useful as evidence."""
+    if frame.size == 0:
+        return False
+
+    grayscale = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if frame.ndim == 3 else frame
+    mean_brightness = float(grayscale.mean())
+    contrast = float(grayscale.std())
+    lit_pixels = float(np.count_nonzero(grayscale > 8)) / grayscale.size
+
+    return mean_brightness >= 8.0 and contrast >= 4.0 and lit_pixels >= 0.05
+
+
 def save_intruder_image(
     frame: np.ndarray,
     intruders_dir: str = INTRUDERS_DIR,
 ) -> str | None:
     """Save an annotated intruder frame as a JPEG and return the file path."""
     try:
+        if not has_visual_content(frame):
+            raise OSError("Refusing to save a blank or near-black intruder frame.")
         os.makedirs(intruders_dir, exist_ok=True)
         image_path = build_intruder_image_path(intruders_dir)
         saved = cv2.imwrite(image_path, frame)

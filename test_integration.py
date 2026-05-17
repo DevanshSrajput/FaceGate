@@ -6,8 +6,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import cv2
 import numpy as np
 
+import web.app as web_app_module
 from modules.access_control import AccessController
 from modules.camera import log_access_decisions
 from modules.database import get_logs, init_db, log_event
@@ -33,9 +35,16 @@ class EnrollmentToRecognitionTests(unittest.TestCase):
         import modules.database as db_module
 
         self._saved_cam_log = cam_module.log_event
+        self._saved_save_intruder_image = cam_module.save_intruder_image
         self._saved_db_log = db_module.log_event
         cam_module.log_event = _wrapped_log_event
         db_module.log_event = _wrapped_log_event
+
+        def _wrapped_save_intruder_image(frame, intruders_dir=None):
+            target_dir = intruders_dir or str(Path(self.tmpdir.name) / "intruders")
+            return self._saved_save_intruder_image(frame, target_dir)
+
+        cam_module.save_intruder_image = _wrapped_save_intruder_image
 
         init_db(self.db_path)
 
@@ -44,6 +53,7 @@ class EnrollmentToRecognitionTests(unittest.TestCase):
         import modules.database as db_module
 
         cam_module.log_event = self._saved_cam_log
+        cam_module.save_intruder_image = self._saved_save_intruder_image
         db_module.log_event = self._saved_db_log
         self.tmpdir.cleanup()
 
@@ -57,7 +67,11 @@ class EnrollmentToRecognitionTests(unittest.TestCase):
         # detect_faces and encode_faces internally. Instead we exercise the
         # log_access_decisions path directly so the test is deterministic.
         access_controller = AccessController(confirmation_frames=1, cooldown_sec=0)
-        dummy_frame = np.zeros((240, 320, 3), dtype=np.uint8)
+        dummy_frame = np.full((240, 320, 3), (48, 88, 132), dtype=np.uint8)
+        cv2.rectangle(dummy_frame, (72, 40), (248, 220), (178, 202, 224), -1)
+        cv2.circle(dummy_frame, (130, 112), 12, (25, 35, 45), -1)
+        cv2.circle(dummy_frame, (190, 112), 12, (25, 35, 45), -1)
+        cv2.ellipse(dummy_frame, (160, 160), (42, 18), 0, 0, 180, (20, 30, 40), 3)
 
         # build the names/statuses that classify_frame would produce
         names: list[str] = []
@@ -109,6 +123,10 @@ class EnrollmentToRecognitionTests(unittest.TestCase):
             Path(denied[0]["image_path"]).exists() if denied[0]["image_path"] else False,
             "Expected an intruder image file to exist on disk.",
         )
+        image = cv2.imread(denied[0]["image_path"])
+        self.assertIsNotNone(image, "Expected saved intruder image to be readable.")
+        self.assertGreater(float(image.mean()), 8.0, "Expected saved intruder image to be non-black.")
+        self.assertGreater(float(image.std()), 4.0, "Expected saved intruder image to contain visual detail.")
 
 
 class FlaskRouteTests(unittest.TestCase):
@@ -117,15 +135,35 @@ class FlaskRouteTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.tmpdir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
-        cls.db_path = str(Path(cls.tmpdir.name) / "access_logs.db")
+        cls.tmpdir_path = Path(cls.tmpdir.name)
+        cls.db_path = str(cls.tmpdir_path / "access_logs.db")
+        cls.intruders_dir = cls.tmpdir_path / "intruders"
+        cls.intruders_dir.mkdir()
+        cls.intruder_filename = "intruder_test.jpg"
+        cls.intruder_path = cls.intruders_dir / cls.intruder_filename
+        cv2.imwrite(str(cls.intruder_path), np.full((24, 32, 3), (90, 140, 190), dtype=np.uint8))
 
         init_db(cls.db_path)
         log_event("Alice", "Granted", db_path=cls.db_path)
-        log_event("Unknown", "Denied", image_path="/tmp/test.jpg", db_path=cls.db_path)
+        log_event("Unknown", "Denied", image_path=str(cls.intruder_path), db_path=cls.db_path)
 
-        from web.app import create_app
+        cls._original_intruders_dir = web_app_module.INTRUDERS_DIR
+        cls._original_get_logs = web_app_module.get_logs
+        cls._original_get_summary = web_app_module.get_summary
+        web_app_module.INTRUDERS_DIR = str(cls.intruders_dir)
 
-        app = create_app()
+        def _get_logs(*args, **kwargs):
+            kwargs["db_path"] = cls.db_path
+            return cls._original_get_logs(*args, **kwargs)
+
+        def _get_summary(*args, **kwargs):
+            kwargs["db_path"] = cls.db_path
+            return cls._original_get_summary(*args, **kwargs)
+
+        web_app_module.get_logs = _get_logs
+        web_app_module.get_summary = _get_summary
+
+        app = web_app_module.create_app()
         app.config["TESTING"] = True
         app.config["SECRET_KEY"] = "test-key"
 
@@ -144,6 +182,9 @@ class FlaskRouteTests(unittest.TestCase):
         import modules.database as db_module
 
         db_module.DB_PATH = cls._original_db_path
+        web_app_module.INTRUDERS_DIR = cls._original_intruders_dir
+        web_app_module.get_logs = cls._original_get_logs
+        web_app_module.get_summary = cls._original_get_summary
         cls.tmpdir.cleanup()
 
     def _login(self) -> None:
@@ -162,6 +203,8 @@ class FlaskRouteTests(unittest.TestCase):
         self.assertIn("Granted", html)
         self.assertIn("Unknown", html)
         self.assertIn("Denied", html)
+        self.assertIn("log-image-link", html)
+        self.assertIn(self.intruder_filename, html)
 
     def test_it03_logs_filter_json(self) -> None:
         """IT-03 extension: /logs/filter?format=json returns JSON array."""
@@ -171,6 +214,14 @@ class FlaskRouteTests(unittest.TestCase):
         data = response.get_json()
         self.assertIsInstance(data, list)
         self.assertTrue(all(r["status"] == "Granted" for r in data))
+
+    def test_it03_intruder_image_route_serves_jpeg(self) -> None:
+        """IT-03 extension: protected intruder images are served from configured storage."""
+        self._login()
+        response = self.client.get(f"/intruders/image/{self.intruder_filename}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content_type, "image/jpeg")
+        self.assertGreater(len(response.data), 0)
 
     def test_it04_start_camera_thread(self) -> None:
         """IT-04: POST /start spawns camera thread; GET /status returns running=true."""

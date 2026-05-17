@@ -36,7 +36,11 @@
                 <td>{{ row.timestamp }}</td>
                 <td>
                     {% if row.image_path %}
-                        <a href="{{ url_for('intruder_image', filename=row.image_path|image_basename) }}">View</a>
+                        {% set intruder_filename = row.image_path|image_basename %}
+                        <a class="log-image-link" href="{{ url_for('intruder_image', filename=intruder_filename) }}">
+                            <img src="{{ url_for('intruder_image', filename=intruder_filename) }}" alt="Captured intruder">
+                            <span>View</span>
+                        </a>
                     {% else %}
                         -
                     {% endif %}

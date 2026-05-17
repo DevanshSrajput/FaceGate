@@ -60,7 +60,11 @@
                     <td>{{ row.timestamp }}</td>
                     <td>
                         {% if row.image_path %}
-                            <a href="{{ url_for('intruder_image', filename=row.image_path|image_basename) }}">View</a>
+                            {% set intruder_filename = row.image_path|image_basename %}
+                            <a class="log-image-link" href="{{ url_for('intruder_image', filename=intruder_filename) }}">
+                                <img src="{{ url_for('intruder_image', filename=intruder_filename) }}" alt="Captured intruder">
+                                <span>View</span>
+                            </a>
                         {% else %}
                             -
                         {% endif %}
@@ -137,8 +141,12 @@ function cameraAction(action) {
                 for (var i = 0; i < summary.last_events.length; i++) {
                     var row = summary.last_events[i];
                     var badgeClass = row.status === "Granted" ? "granted" : "denied";
+                    var filename = row.image_path
+                        ? row.image_path.split("/").pop().split("\\").pop()
+                        : "";
+                    var imageUrl = filename ? "/intruders/image/" + encodeURIComponent(filename) : "";
                     var imageCell = row.image_path
-                        ? '<a href="/intruders/image/' + row.image_path.split("/").pop().split("\\").pop() + '">View</a>'
+                        ? '<a class="log-image-link" href="' + imageUrl + '"><img src="' + imageUrl + '" alt="Captured intruder"><span>View</span></a>'
                         : "-";
                     rows += '<tr><td>' + row.id + '</td><td>' + row.name + '</td>'
                         + '<td><span class="badge ' + badgeClass + '">' + row.status + '</span></td>'

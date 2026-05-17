@@ -15,6 +15,7 @@ import numpy as np
 from flask import (
     Flask,
     Response,
+    abort,
     jsonify,
     redirect,
     render_template,
@@ -46,11 +47,20 @@ camera_state: dict[str, Any] = {
     "last_error": None,
 }
 camera_state_lock = threading.Lock()
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # Shared buffer for the latest annotated frame (JPEG bytes) pushed by the
 # camera loop and consumed by the /video_feed MJPEG route.
 _latest_frame_jpeg: bytes | None = None
 _latest_frame_lock = threading.Lock()
+
+
+def intruders_directory() -> Path:
+    """Return the configured intruder image directory as an absolute path."""
+    configured = Path(INTRUDERS_DIR)
+    if configured.is_absolute():
+        return configured
+    return (PROJECT_ROOT / configured).resolve()
 
 
 def _make_placeholder_jpeg() -> bytes:
@@ -174,7 +184,7 @@ def get_log_filters() -> dict[str, str]:
 
 def list_intruder_images() -> list[dict[str, str]]:
     """Return intruder image metadata for the protected gallery page."""
-    intruders_path = Path(INTRUDERS_DIR)
+    intruders_path = intruders_directory()
     if not intruders_path.exists():
         return []
 
@@ -274,7 +284,10 @@ def register_routes(app: Flask) -> None:
     @login_required
     def intruder_image(filename: str) -> Any:
         """Serve an intruder image only to authenticated dashboard users."""
-        return send_from_directory(INTRUDERS_DIR, filename)
+        safe_name = Path(filename).name
+        if not safe_name.lower().endswith((".jpg", ".jpeg")):
+            abort(404)
+        return send_from_directory(intruders_directory(), safe_name)
 
     @app.route("/start", methods=["GET", "POST"])
     @login_required

@@ -6,10 +6,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import cv2
 import numpy as np
 
 from modules.access_control import AccessController
 from modules.alert import AlertManager
+from modules.camera import has_visual_content, save_intruder_image
 from modules.database import get_logs, get_summary, init_db, log_event
 from modules.face_engine import load_encodings, match_face, save_encodings
 
@@ -95,6 +97,32 @@ class AccessControlTests(unittest.TestCase):
         self.assertFalse(controller.can_log("Alice"))
         now[0] = 131.0
         self.assertTrue(controller.can_log("Alice"))
+
+
+class CameraTests(unittest.TestCase):
+    """Tests for intruder capture safeguards."""
+
+    def test_intruder_capture_rejects_blank_frame(self) -> None:
+        """Blank camera frames should not be saved as intruder evidence."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            frame = np.zeros((120, 160, 3), dtype=np.uint8)
+            image_path = save_intruder_image(frame, intruders_dir=tmpdir)
+            self.assertIsNone(image_path)
+            self.assertEqual(list(Path(tmpdir).glob("*.jpg")), [])
+
+    def test_intruder_capture_preserves_nonblank_frame(self) -> None:
+        """Non-blank camera frames should be saved with visual content intact."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            frame = np.full((120, 160, 3), (60, 110, 160), dtype=np.uint8)
+            cv2.rectangle(frame, (35, 20), (125, 105), (190, 215, 235), -1)
+            self.assertTrue(has_visual_content(frame))
+
+            image_path = save_intruder_image(frame, intruders_dir=tmpdir)
+            self.assertIsNotNone(image_path)
+            saved = cv2.imread(image_path)
+            self.assertIsNotNone(saved)
+            self.assertGreater(float(saved.mean()), 8.0)
+            self.assertGreater(float(saved.std()), 4.0)
 
 
 class AlertTests(unittest.TestCase):
